@@ -178,8 +178,36 @@ def Data_analysis_DM000318(Injection_rate, Turbidity_raw, pH_raw):
     return y_pred_original_scale
     
 if __name__ == '__main__':
- # PLCトリガーを取得、実行
+    # PLCトリガーを取得、実行
     logger.info("Starting the process...")
+
+    # 起動時にCSVファイルのデータのみをクリアする処理を追加
+    def clear_csv_data():
+        csv_files = {
+            'trigger': '/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script/trigger.csv',
+            'file_write_raw': '/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script/file_write_raw.csv',
+            'result_trigger': '/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script/result_trigger.csv',
+            '1537': '/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script/1537.csv'
+        }
+
+        for file_name, file_path in csv_files.items():
+            try:
+                # CSVファイルを読み込む
+                df = pd.read_csv(file_path)
+
+                # データ部分のみを削除（ヘッダーは保持）
+                df_cleared = df.iloc[0:0]
+
+                # ヘッダーを保持したまま保存
+                df_cleared.to_csv(file_path, index=False)
+                logger.info(f"Cleared data from {file_name}.csv while keeping headers")
+            except Exception as e:
+                logger.error(f"Error clearing data from {file_name}.csv: {e}")
+                logger.error(f"Error details: {str(e)}")
+
+    # プログラム起動時にCSVファイルのデータをクリア
+    logger.info("Starting the process... Clearing CSV data while keeping headers")
+    clear_csv_data()
     
     def generate_signal():
         df = pd.read_csv('/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script/trigger.csv')
@@ -348,7 +376,7 @@ if __name__ == '__main__':
                                 previous_DM37 = DM37
                                 
                                 # 予測値を取得
-                                y_pred_original_scale = predict_value(df['DM00086'].values[0], df['DM00126'].values[0], df_result['DM15'].values[0], df_result['DM37'], df['DM00318'].values[0], df['DM00027'].values[0], Best_JT_PAC, injection_rate_float, df_010['MR010'].values[0], df_010['MR103'].values[0])
+                                y_pred_original_scale = predict_value(df['DM00086'].values[0], df['DM00126'].values[0], df_result['DM15'].values[0], df_result['DM37'], df['DM00318'].values[0], df['DM00027'].values[0], Best_JT_PAC if Best_JT_PAC is not None else 0, injection_rate_float, df_010['MR010'].values[0], df_010['MR103'].values[0])
                                 
                                 client.on_publish = on_publish
 
@@ -374,7 +402,7 @@ if __name__ == '__main__':
                                     df_result['DM37'] = previous_DM37
                                     
                                     # 予測値を取得
-                                    y_pred_original_scale_countinue = predict_value(df['DM00086'].values[0], df['DM00126'].values[0], df_result['DM15'].values[0], df_result['DM37'], df['DM00318'].values[0], df['DM00027'].values[0], Best_JT_PAC, injection_rate_float, df_010['MR010'].values[0], df_010['MR103'].values[0])
+                                    y_pred_original_scale_countinue = predict_value(df['DM00086'].values[0], df['DM00126'].values[0], df_result['DM15'].values[0], df_result['DM37'], df['DM00318'].values[0], df['DM00027'].values[0], Best_JT_PAC if Best_JT_PAC is not None else 0, injection_rate_float, df_010['MR010'].values[0], df_010['MR103'].values[0])
                                     
                                     client.on_publish = on_publish
 
