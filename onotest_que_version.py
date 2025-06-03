@@ -23,20 +23,73 @@ logger = logging.getLogger(__name__)
 
 # .envファイルを読み込む
 load_dotenv('./.env')
-# AWS IoT Coreの設定を環境変数から取得
-AWS_IOT_ENDPOINT = os.getenv("AWS_IOT_ENDPOINT")
-PATH_TO_CERT = os.getenv("PATH_TO_CERT")
-PATH_TO_KEY = os.getenv("PATH_TO_KEY")
-PATH_TO_ROOT = os.getenv("PATH_TO_ROOT")
-TOPIC = os.getenv("TOPIC")
 
-# MQTTクライアントの設定
-client = mqtt.Client()
-client.tls_set(PATH_TO_ROOT, certfile=PATH_TO_CERT, keyfile=PATH_TO_KEY)
-# 接続の設定
-client.connect(AWS_IOT_ENDPOINT, 8883)
-# メインループ
-client.loop_start()
+# AWS IoT Coreの設定を環境変数から取得（エラーハンドリング追加）
+def get_env_variable(var_name, default=None):
+    """環境変数を安全に取得する関数"""
+    value = os.getenv(var_name, default)
+    if value is None:
+        logger.error(f"環境変数 {var_name} が設定されていません")
+        raise ValueError(f"環境変数 {var_name} が設定されていません")
+    return value
+
+try:
+    AWS_IOT_ENDPOINT = get_env_variable("AWS_IOT_ENDPOINT")
+    PATH_TO_CERT = get_env_variable("PATH_TO_CERT")
+    PATH_TO_KEY = get_env_variable("PATH_TO_KEY")
+    PATH_TO_ROOT = get_env_variable("PATH_TO_ROOT")
+    TOPIC = get_env_variable("TOPIC")
+
+    # ファイルの存在確認
+    for file_path, name in [(PATH_TO_CERT, "証明書"), (PATH_TO_KEY, "秘密鍵"), (PATH_TO_ROOT, "ルート証明書")]:
+        if not os.path.exists(file_path):
+            logger.error(f"{name}ファイルが見つかりません: {file_path}")
+            raise FileNotFoundError(f"{name}ファイルが見つかりません: {file_path}")
+
+    logger.info("AWS IoT Core設定の読み込みが完了しました")
+
+except (ValueError, FileNotFoundError) as e:
+    logger.error(f"設定エラー: {e}")
+    exit(1)
+
+# 接続エラー時のコールバック関数を先に定義
+def on_connect(client, userdata, flags, rc):
+    if rc == 0:
+        logger.info("AWS IoT Coreに正常に接続しました")
+    else:
+        logger.error(f"接続失敗: {rc}")
+
+def on_disconnect(client, userdata, rc):
+    if rc != 0:
+        logger.error("Connection lost! Reconnecting...")
+        while True:
+            try:
+                client.reconnect()
+                logger.info("Reconnected!")
+                break
+            except Exception as e:
+                logger.error(f"Reconnect failed: {e}, retrying in 5 seconds...")
+                time.sleep(5)
+
+# MQTTクライアントの設定（エラーハンドリング追加）
+try:
+    client = mqtt.Client()
+    client.tls_set(PATH_TO_ROOT, certfile=PATH_TO_CERT, keyfile=PATH_TO_KEY)
+
+    # コールバック関数を設定
+    client.on_connect = on_connect
+    client.on_disconnect = on_disconnect
+
+    # 接続の設定（タイムアウトとキープアライブ追加）
+    client.connect(AWS_IOT_ENDPOINT, 8883, keepalive=60)
+    # メインループ
+    client.loop_start()
+    logger.info("MQTTクライアントの初期化が完了しました")
+
+except Exception as e:
+    logger.error(f"MQTT接続エラー: {e}")
+    exit(1)
+
     
 def predict_value(DM00086_data, DM00126_data, DM00015_data, DM00037_data, DM00318_data, DM00027_data, DM00410_data, DM00420_data, MR103_data, MR010_data):
     
@@ -343,21 +396,6 @@ if __name__ == '__main__':
                             
                             df_result['MR010'] = MR010
                             df_result['MR103'] = MR103
-                            
-                            # MQTTクライアントの設定
-                            # 接続が失われたときのコールバック
-                            def on_disconnect(client, userdata, rc):
-                                if rc != 0:
-                                    logger.error("Connection lost! Reconnecting...")
-                                    while True:
-                                        try:
-                                            client.reconnect()
-                                            logger.error("Reconnected!")
-                                            break
-                                        except:
-                                            logger.error("Reconnect failed, retrying in 5 seconds...")
-
-                            client.on_disconnect = on_disconnect
                             
                             # メッセージ送信のコールバック
                             def on_publish(client, userdata, mid):
