@@ -427,14 +427,14 @@ if __name__ == '__main__':
                                     df_result['DM37'] = previous_DM37
                                     
                                     # 予測値を取得
-                                    y_pred_original_scale_countinue = predict_value(df['DM00086'].values[0], df['DM00126'].values[0], df_result['DM15'].values[0], df_result['DM37'], df['DM00318'].values[0], df['DM00027'].values[0], Best_JT_PAC if Best_JT_PAC is not None else 0, injection_rate_float, df_010['MR010'].values[0], df_010['MR103'].values[0])
+                                    y_pred_original_scale = predict_value(df['DM00086'].values[0], df['DM00126'].values[0], df_result['DM15'].values[0], df_result['DM37'], df['DM00318'].values[0], df['DM00027'].values[0], Best_JT_PAC if Best_JT_PAC is not None else 0, injection_rate_float, df_010['MR010'].values[0], df_010['MR103'].values[0])
                                     
                                     client.on_publish = on_publish
 
                                     # メッセージを送信
                                     topic = TOPIC
                                     
-                                    message_dict = y_pred_original_scale_countinue
+                                    message_dict = y_pred_original_scale
                                     
                                     # 辞書をJSON文字列に変換
                                     message = json.dumps(message_dict)
