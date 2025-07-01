@@ -2,16 +2,13 @@ import joblib
 import time
 import glob
 import ssl
-import time
 import json
 import os
 import logging
 from datetime import datetime, timezone, timedelta
-from datetime import datetime
 from collections import deque
 import pandas as pd
 import numpy as np 
-from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error
 import paho.mqtt.client as mqtt
@@ -23,6 +20,9 @@ logger = logging.getLogger(__name__)
 
 # .envファイルを読み込む
 load_dotenv('./.env')
+
+# ベースディレクトリの設定
+BASE_DIR = '/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script'
 
 # AWS IoT Coreの設定を環境変数から取得（エラーハンドリング追加）
 def get_env_variable(var_name, default=None):
@@ -90,6 +90,14 @@ except Exception as e:
     logger.error(f"MQTT接続エラー: {e}")
     exit(1)
 
+# モデルを一度だけ読み込む（グローバル変数として）
+try:
+    LOADED_MODEL = joblib.load(f'{BASE_DIR}/random_forest_regressor.joblib')
+    logger.info("機械学習モデルの読み込みが完了しました")
+except Exception as e:
+    logger.error(f"モデルファイルの読み込みエラー: {e}")
+    exit(1)
+
     
 def predict_value(DM00086_data, DM00126_data, DM00015_data, DM00037_data, DM00318_data, DM00027_data, DM00410_data, DM00420_data, MR103_data, MR010_data):
     
@@ -137,28 +145,20 @@ def csv_file_creation(Turbidity_raw, pH_raw):
     50, 7.16, 7.48, 0.1
     """
 
-    # 同じ数字でDataFrameを作成
-    number2 = Turbidity_raw
-    number3 = pH_raw
-
     data = {
         "JT_PAC": list(range(5, 51)),
-        "Turbidity_raw": [number2] * 46,
-        "pH_raw": [number3] * 46,
+        "Turbidity_raw": [Turbidity_raw] * 46,
+        "pH_raw": [pH_raw] * 46,
     }
 
     df = pd.DataFrame(data)
-    df.to_csv('/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script/setting_data.csv', index=False)
+    df.to_csv(f'{BASE_DIR}/setting_data.csv', index=False)
 
 def Data_analysis(data, Target_value):
     """
     variable:
     DM00027: Target value
     """
-    
-    # 保存されたモデルの読み込み
-    # loaded_model = joblib.load('model/2024-06-03_rf_model_1_JT_turbidity_LN_pkl_cmp')
-    loaded_model = joblib.load('/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script/random_forest_regressor.joblib')
 
     # 特徴量とターゲット変数の定義（再度定義する必要がある場合）
     X = data[['JT_PAC', 'Turbidity_raw', 'pH_raw']]
@@ -167,8 +167,8 @@ def Data_analysis(data, Target_value):
     except:
         y = None
 
-    # テストデータでの予測
-    y_pred = loaded_model.predict(X)
+    # テストデータでの予測（グローバル変数のモデルを使用）
+    y_pred = LOADED_MODEL.predict(X)
 
     # 予測値を元のスケールに戻す
     y_pred_original_scale = np.exp(y_pred)
@@ -176,7 +176,7 @@ def Data_analysis(data, Target_value):
     if y is not None:
         # モデルの性能評価（元のスケールで評価）
         mse = mean_squared_error(np.exp(y), y_pred_original_scale)
-        logger.error(f'Mean Squared Error (original scale): {mse}')
+        logger.info(f'Mean Squared Error (original scale): {mse}')
     
     data['JT_turbidity_LN'] = y_pred_original_scale
     
@@ -198,15 +198,6 @@ def Data_analysis(data, Target_value):
     else:
         jt_pac_value = None  # または適切なデフォルト値を設定
 
-    # 結果の表示（必要に応じて）
-    logger.info(f'max_pac_row: {max_pac_row}')
-    
-    # max_pac_rowが空でないかを確認
-    if not max_pac_row.empty:
-        jt_pac_value = max_pac_row["JT_PAC"].values[0]  # .valuesを使用して配列を取得し、最初の要素を選択
-    else:
-        jt_pac_value = None  # または適切なデフォルト値を設定
-
     # DataFrameをJT_turbidity_LNで昇順にソートし、その後JT_PACでも昇順にソート
     sorted_df = data.sort_values(by=['JT_turbidity_LN', 'JT_PAC'], ascending=[True, True])
     # ソートされたデータを表示
@@ -215,15 +206,11 @@ def Data_analysis(data, Target_value):
     return jt_pac_value
 
 def Data_analysis_DM000318(Injection_rate, Turbidity_raw, pH_raw):
-    # 保存されたモデルの読み込み
-    # loaded_model = joblib.load('model/2024-06-03_rf_model_1_JT_turbidity_LN_pkl_cmp')
-    loaded_model = joblib.load('/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script/random_forest_regressor.joblib')
-
     # 特徴量とターゲット変数の定義（再度定義する必要がある場合）
     X = [[Injection_rate, Turbidity_raw, pH_raw]]
 
-    # テストデータでの予測
-    y_pred = loaded_model.predict(X)
+    # テストデータでの予測（グローバル変数のモデルを使用）
+    y_pred = LOADED_MODEL.predict(X)
     
     # 予測値を元のスケールに戻す
     y_pred_original_scale = np.exp(y_pred)
@@ -237,10 +224,10 @@ if __name__ == '__main__':
     # 起動時にCSVファイルのデータのみをクリアする処理を追加
     def clear_csv_data():
         csv_files = {
-            'trigger': '/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script/trigger.csv',
-            'file_write_raw': '/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script/file_write_raw.csv',
-            'result_trigger': '/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script/result_trigger.csv',
-            '1537': '/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script/1537.csv'
+            'trigger': f'{BASE_DIR}/trigger.csv',
+            'file_write_raw': f'{BASE_DIR}/file_write_raw.csv',
+            'result_trigger': f'{BASE_DIR}/result_trigger.csv',
+            '1537': f'{BASE_DIR}/1537.csv'
         }
 
         for file_name, file_path in csv_files.items():
@@ -263,26 +250,26 @@ if __name__ == '__main__':
     clear_csv_data()
     
     def generate_signal():
-        df = pd.read_csv('/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script/trigger.csv')
+        df = pd.read_csv(f'{BASE_DIR}/trigger.csv')
 
         # データ部分を削除し、ヘッダーのみを保持
         df_delete = df.iloc[0:0]
 
         # 変更を同じファイルに上書き保存
-        df_delete.to_csv('/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script/trigger.csv', index=False)
+        df_delete.to_csv(f'{BASE_DIR}/trigger.csv', index=False)
         
         for index, row in df.iterrows():
             if row['MR010'] == 1:
                 return 1
             else:
                 # CSVファイルを読み込む
-                df = pd.read_csv('/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script/file_write_raw.csv')
+                df = pd.read_csv(f'{BASE_DIR}/file_write_raw.csv')
                 
                 # データ部分を削除し、ヘッダーのみを保持
                 df_delete_2 = df.iloc[0:0]
 
                 # 変更を同じファイルに上書き保存
-                df_delete_2.to_csv('/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script/file_write_raw.csv', index=False)
+                df_delete_2.to_csv(f'{BASE_DIR}/file_write_raw.csv', index=False)
               
   
     def flatten_nested_deque(queue):
@@ -324,21 +311,21 @@ if __name__ == '__main__':
                         
                     # ここでMR10が1のときに実行するスクリプトを呼び出す
                     # CSVファイルを読み込む
-                    df = pd.read_csv('/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script/file_write_raw.csv')
+                    df = pd.read_csv(f'{BASE_DIR}/file_write_raw.csv')
                     # データ部分を削除し、ヘッダーのみを保持
                     df_delete_2 = df.iloc[0:0]
                     # 変更を同じファイルに上書き保存
-                    df_delete_2.to_csv('/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script/file_write_raw.csv', index=False)
+                    df_delete_2.to_csv(f'{BASE_DIR}/file_write_raw.csv', index=False)
                     
                     # MR010, 103
-                    df_010 = pd.read_csv('/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script/result_trigger.csv')
+                    df_010 = pd.read_csv(f'{BASE_DIR}/result_trigger.csv')
                     df_delete_2_010 = df_010.iloc[0:0]
-                    df_delete_2_010.to_csv('/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script/result_trigger.csv', index=False)
+                    df_delete_2_010.to_csv(f'{BASE_DIR}/result_trigger.csv', index=False)
 
                     # DM15, 37
-                    df_1537 = pd.read_csv('/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script/1537.csv')
+                    df_1537 = pd.read_csv(f'{BASE_DIR}/1537.csv')
                     df_delete_2_1537 = df_1537.iloc[0:0]
-                    df_delete_2_1537.to_csv('/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script/1537.csv', index=False)
+                    df_delete_2_1537.to_csv(f'{BASE_DIR}/1537.csv', index=False)
 
                     # dfが少なくとも1行のデータを持っているかどうかをチェック
                     if len(df) > 0:
@@ -351,7 +338,7 @@ if __name__ == '__main__':
                             Target_value = df['DM00027'].values[0] / 100
                             Injection_rate = df['DM00318'].values[0] / 10
 
-                            Analysis_data = pd.read_csv('/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script/setting_data.csv')
+                            Analysis_data = pd.read_csv(f'{BASE_DIR}/setting_data.csv')
                             Best_JT_PAC = Data_analysis(Analysis_data, Target_value)
                             
                             Injection_rate_result = Data_analysis_DM000318(Injection_rate, Turbidity_raw, pH_raw)
@@ -360,8 +347,8 @@ if __name__ == '__main__':
                             # Best_JT_PACを含むDataFrameを作成
                             df_result = pd.DataFrame([Best_JT_PAC], columns=['Best_JT_PAC'])
 
-                            # # DataFrameをCSVファイルに保存
-                            # df_result.to_csv('/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script/Best_JT_PAC.csv', header=False, index=False)
+                            # DataFrameをCSVファイルに保存
+                            df_result.to_csv(f'{BASE_DIR}/Best_JT_PAC.csv', header=False, index=False)
                             
                             # Injection_rate_resultをDataFrameに変換して保存
                             df_injection_rate_result = pd.DataFrame(Injection_rate_result)
@@ -369,7 +356,7 @@ if __name__ == '__main__':
                             # 配列の要素を取り出して浮動小数点数に変換
                             injection_rate_float = float(df_injection_rate_result.values[0][0])
                             
-                            # df_injection_rate_result.to_csv('/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script/Best_JT_PAC_2.csv', header=False, index=False)
+                            # df_injection_rate_result.to_csv(f'{BASE_DIR}/Best_JT_PAC_2.csv', header=False, index=False)
                             
                             # result_total_data.csvにBest_JT_PACを追加
                             # 新しいデータを追加
@@ -461,7 +448,7 @@ if __name__ == '__main__':
                                         logger.info(f"Failed to send message to topic2 `{topic}`")
                                 
                             # df_resultをCSVファイルに保存
-                            file_path = '/home/js-027/Downloads/dgw_sdcard/dxpgateway/document/AJT-script/result_total_data.csv'
+                            file_path = f'{BASE_DIR}/result_total_data.csv'
                             df_result.to_csv(file_path, mode='a', header=False, index=False)
                             
                             logger.info(f'y_pred_original_scale: {y_pred_original_scale}')
@@ -472,3 +459,4 @@ if __name__ == '__main__':
                 # エラーが発生した場合に少し待機してから再開
                 time.sleep(120)
     process_signals()
+
