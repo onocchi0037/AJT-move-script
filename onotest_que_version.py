@@ -356,6 +356,10 @@ if __name__ == '__main__':
                             # 配列の要素を取り出して浮動小数点数に変換
                             injection_rate_float = float(df_injection_rate_result.values[0][0])
                             
+                            # injection_resultを新しいCSVファイルに出力（常に上書き）
+                            df_injection_result_output = pd.DataFrame([[injection_rate_float]], columns=['injection_result'])
+                            df_injection_result_output.to_csv(f'{BASE_DIR}/injection_result.csv', mode='w', header=False, index=False)
+                            
                             # df_injection_rate_result.to_csv(f'{BASE_DIR}/Best_JT_PAC_2.csv', header=False, index=False)
                             
                             # result_total_data.csvにBest_JT_PACを追加
