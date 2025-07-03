@@ -99,7 +99,7 @@ except Exception as e:
     exit(1)
 
     
-def predict_value(DM00086_data, DM00126_data, DM00015_data, DM00037_data, DM00318_data, DM00027_data, DM00410_data, DM00420_data, MR103_data, MR010_data):
+def predict_value(DM00086_data, DM00126_data, DM00015_data, DM00037_data, DM00318_data, DM00027_data, DM00410_data, DM00420_data, H430_data, MR103_data, MR010_data):
     
     # 現在の時間を取得
     now = datetime.now(timezone(timedelta(hours=9)))
@@ -127,6 +127,7 @@ def predict_value(DM00086_data, DM00126_data, DM00015_data, DM00037_data, DM0031
             "DM00027": int(DM00027_data) if DM00027_data is not None else 0,
             "DM00410": int(DM00410_data) if DM00410_data is not None else 0,
             "DM00420": float(DM00420_data) if DM00420_data is not None else 0,
+            "DM00430": int(H430_data) if H430_data is not None else 0,
             "MR103": int(MR103_data) if MR103_data is not None else 0,
             "MR010": int(MR010_data) if MR010_data is not None else 0,
         }
@@ -227,7 +228,8 @@ if __name__ == '__main__':
             'trigger': f'{BASE_DIR}/trigger.csv',
             'file_write_raw': f'{BASE_DIR}/file_write_raw.csv',
             'result_trigger': f'{BASE_DIR}/result_trigger.csv',
-            '1537': f'{BASE_DIR}/1537.csv'
+            '1537': f'{BASE_DIR}/1537.csv',
+            '430': f'{BASE_DIR}/430.csv'
         }
 
         for file_name, file_path in csv_files.items():
@@ -327,6 +329,11 @@ if __name__ == '__main__':
                     df_delete_2_1537 = df_1537.iloc[0:0]
                     df_delete_2_1537.to_csv(f'{BASE_DIR}/1537.csv', index=False)
 
+                    # H430
+                    df_430 = pd.read_csv(f'{BASE_DIR}/430.csv')
+                    df_delete_2_430 = df_430.iloc[0:0]
+                    df_delete_2_430.to_csv(f'{BASE_DIR}/430.csv', index=False)
+
                     # dfが少なくとも1行のデータを持っているかどうかをチェック
                     if len(df) > 0:
                         # dfにDM00086, DM00126, DM00027の各カラムが存在し、それぞれの値がNaNでないことを確認
@@ -388,10 +395,18 @@ if __name__ == '__main__':
                             df_result['MR010'] = MR010
                             df_result['MR103'] = MR103
                             
+                            # H430の値を取得
+                            H430_value = 0  # デフォルト値
+                            if not df_430.empty:
+                                H430_value = df_430['H430'].values[0]
+                            
+                            # H430の値をresult_total_data.csvに追加
+                            df_result['H430'] = H430_value
+                            
                             # メッセージ送信のコールバック
                             def on_publish(client, userdata, mid):
                                 logger.info("Message Published...")
-                            
+
                             # df_1537にデータがあるか確認
                             if not df_1537.empty:
                                 DM15 = df_1537['recive_15'].values[0]
@@ -405,7 +420,7 @@ if __name__ == '__main__':
                                 previous_DM37 = DM37
                                 
                                 # 予測値を取得
-                                y_pred_original_scale = predict_value(df['DM00086'].values[0], df['DM00126'].values[0], df_result['DM15'].values[0], df_result['DM37'], df['DM00318'].values[0], df['DM00027'].values[0], Best_JT_PAC if Best_JT_PAC is not None else 0, injection_rate_float, df_010['MR010'].values[0], df_010['MR103'].values[0])
+                                y_pred_original_scale = predict_value(df['DM00086'].values[0], df['DM00126'].values[0], df_result['DM15'].values[0], df_result['DM37'], df['DM00318'].values[0], df['DM00027'].values[0], Best_JT_PAC if Best_JT_PAC is not None else 0, injection_rate_float, H430_value, df_010['MR010'].values[0], df_010['MR103'].values[0])
                                 
                                 client.on_publish = on_publish
 
@@ -431,7 +446,7 @@ if __name__ == '__main__':
                                     df_result['DM37'] = previous_DM37
                                     
                                     # 予測値を取得
-                                    y_pred_original_scale = predict_value(df['DM00086'].values[0], df['DM00126'].values[0], df_result['DM15'].values[0], df_result['DM37'], df['DM00318'].values[0], df['DM00027'].values[0], Best_JT_PAC if Best_JT_PAC is not None else 0, injection_rate_float, df_010['MR010'].values[0], df_010['MR103'].values[0])
+                                    y_pred_original_scale = predict_value(df['DM00086'].values[0], df['DM00126'].values[0], df_result['DM15'].values[0], df_result['DM37'], df['DM00318'].values[0], df['DM00027'].values[0], Best_JT_PAC if Best_JT_PAC is not None else 0, injection_rate_float, H430_value, df_010['MR010'].values[0], df_010['MR103'].values[0])
                                     
                                     client.on_publish = on_publish
 
