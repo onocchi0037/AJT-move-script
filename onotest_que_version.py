@@ -400,9 +400,6 @@ if __name__ == '__main__':
                             if not df_430.empty:
                                 H430_value = df_430['H430'].values[0]
                             
-                            # H430の値をresult_total_data.csvに追加
-                            df_result['H430'] = H430_value
-                            
                             y_pred_original_scale = None # y_pred_original_scale を初期化
 
                             # df_1537にデータがあるか確認
@@ -431,8 +428,11 @@ if __name__ == '__main__':
                                 else:
                                     logger.warning("DM15またはDM37の過去の値がないため、予測値は計算されませんでした。")
                             
+                            # H430の値をresult_total_data_2.csvの最後の列に追加
+                            df_result['H430'] = H430_value
+                            
                             # df_resultをCSVファイルに保存
-                            file_path = f'{BASE_DIR}/result_total_data.csv'
+                            file_path = f'{BASE_DIR}/result_total_data_2.csv'
                             df_result.to_csv(file_path, mode='a', header=False, index=False)
                             
                             # メッセージ送信のコールバック
