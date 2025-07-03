@@ -403,9 +403,7 @@ if __name__ == '__main__':
                             # H430の値をresult_total_data.csvに追加
                             df_result['H430'] = H430_value
                             
-                            # メッセージ送信のコールバック
-                            def on_publish(client, userdata, mid):
-                                logger.info("Message Published...")
+                            y_pred_original_scale = None # y_pred_original_scale を初期化
 
                             # df_1537にデータがあるか確認
                             if not df_1537.empty:
@@ -422,6 +420,27 @@ if __name__ == '__main__':
                                 # 予測値を取得
                                 y_pred_original_scale = predict_value(df['DM00086'].values[0], df['DM00126'].values[0], df_result['DM15'].values[0], df_result['DM37'], df['DM00318'].values[0], df['DM00027'].values[0], Best_JT_PAC if Best_JT_PAC is not None else 0, injection_rate_float, H430_value, df_010['MR010'].values[0], df_010['MR103'].values[0])
                                 
+                            else:
+                                # df_1537にデータがない場合は前回の値を使用
+                                if previous_DM15 is not None and previous_DM37 is not None:
+                                    df_result['DM15'] = previous_DM15
+                                    df_result['DM37'] = previous_DM37
+                                    
+                                    # 予測値を取得
+                                    y_pred_original_scale = predict_value(df['DM00086'].values[0], df['DM00126'].values[0], df_result['DM15'].values[0], df_result['DM37'], df['DM00318'].values[0], df['DM00027'].values[0], Best_JT_PAC if Best_JT_PAC is not None else 0, injection_rate_float, H430_value, df_010['MR010'].values[0], df_010['MR103'].values[0])
+                                else:
+                                    logger.warning("DM15またはDM37の過去の値がないため、予測値は計算されませんでした。")
+                            
+                            # df_resultをCSVファイルに保存
+                            file_path = f'{BASE_DIR}/result_total_data.csv'
+                            df_result.to_csv(file_path, mode='a', header=False, index=False)
+                            
+                            # メッセージ送信のコールバック
+                            def on_publish(client, userdata, mid):
+                                logger.info("Message Published...")
+                            
+                            if y_pred_original_scale is not None:
+                                logger.info(f'y_pred_original_scale: {y_pred_original_scale}')
                                 client.on_publish = on_publish
 
                                 # メッセージを送信
@@ -440,37 +459,7 @@ if __name__ == '__main__':
                                 else:
                                     logger.info(f"Failed to send message to topic `{topic}`")
                             else:
-                                # df_1537にデータがない場合は前回の値を使用
-                                if previous_DM15 is not None and previous_DM37 is not None:
-                                    df_result['DM15'] = previous_DM15
-                                    df_result['DM37'] = previous_DM37
-                                    
-                                    # 予測値を取得
-                                    y_pred_original_scale = predict_value(df['DM00086'].values[0], df['DM00126'].values[0], df_result['DM15'].values[0], df_result['DM37'], df['DM00318'].values[0], df['DM00027'].values[0], Best_JT_PAC if Best_JT_PAC is not None else 0, injection_rate_float, H430_value, df_010['MR010'].values[0], df_010['MR103'].values[0])
-                                    
-                                    client.on_publish = on_publish
-
-                                    # メッセージを送信
-                                    topic = TOPIC
-                                    
-                                    message_dict = y_pred_original_scale
-                                    
-                                    # 辞書をJSON文字列に変換
-                                    message = json.dumps(message_dict)
-                                    result = client.publish(topic, message)
-
-                                    # 結果を確認
-                                    status = result.rc
-                                    if status == 0:
-                                        logger.info(f"Message sent to topic2 `{topic}`")
-                                    else:
-                                        logger.info(f"Failed to send message to topic2 `{topic}`")
-                                
-                            # df_resultをCSVファイルに保存
-                            file_path = f'{BASE_DIR}/result_total_data.csv'
-                            df_result.to_csv(file_path, mode='a', header=False, index=False)
-                            
-                            logger.info(f'y_pred_original_scale: {y_pred_original_scale}')
+                                logger.info("y_pred_original_scale は計算されませんでした。")
                                 
                 time.sleep(3)  # デモのために3秒待機
             except Exception as e:
